@@ -1,27 +1,25 @@
 AMBIENT OS AI ASSISTANT
------------------------------------------
+==================================================================
 
 RTX 2060 cuda 12.6
 
-===
-python 3.10 (stt):
+
+1) python 3.10 (stt):
 
 pip install RealtimeSTT
 pip install torch==2.3.1+cu121 torchaudio==2.3.1 --index-url https://download.pytorch.org/whl/cu121
 install cudnn
 add /home/wheatfox/miniconda3/envs/stt/lib/python3.10/site-packages/nvidia/cudnn/lib/ to LD_LIBRARY_PATH to use cudnn so
 
-===
-python 3.10 (tts):
+2) python 3.10 (tts):
 
 cd TTS
 make system-deps
 make install
 
-===
-python 3.8 (chatglm):
+3) python 3.8 (chatglm):
 
 install requirements in chatglm_6b
 
------------------------------------------
+==================================================================
 wheatfox 2024
