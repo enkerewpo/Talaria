@@ -23,7 +23,7 @@ while True:
     text = input()
     if text == "exit":
         break
-    tts.tts_to_file(text=text, speaker_wav="../GLaDOS_01.wav", language="en", file_path="output.wav")
+    tts.tts_to_file(text=text, speaker_wav="./GLaDOS_01.wav", language="en", file_path="output.wav")
     # load the wav and playit
     import sounddevice as sd
     import soundfile as sf

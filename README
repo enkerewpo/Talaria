@@ -1,15 +1,19 @@
 AMBIENT OS AI ASSISTANT
 
-python 3.10:
+RTX 2060 cuda 12.6
+
+python 3.10 (stt):
 
 pip install RealtimeSTT
 pip install torch==2.3.1+cu121 torchaudio==2.3.1 --index-url https://download.pytorch.org/whl/cu121
+
+python 3.10 (tts):
 
 cd TTS
 make system-deps
 make install
 
-python 3.8:
+python 3.8 (chatglm):
 
 install requirements in chatglm_6b
 
