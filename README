@@ -1,0 +1,16 @@
+AMBIENT OS AI ASSISTANT
+
+python 3.10:
+
+pip install RealtimeSTT
+pip install torch==2.3.1+cu121 torchaudio==2.3.1 --index-url https://download.pytorch.org/whl/cu121
+
+cd TTS
+make system-deps
+make install
+
+python 3.8:
+
+install requirements in chatglm_6b
+
+wheatfox 2024
