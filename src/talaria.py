@@ -170,13 +170,14 @@ def main_loop():
         tmp_voice_output.clear()
 
         def format_sentence(sentence):
-            # each line can maximum have 95 characters
-            # and we add \n each 95 characters
+            LIMIT = 80
+            # each line can maximum have LIMIT characters
+            # and we add \n each LIMIT characters
             # if the \n is in the middle of a word, we move it to the next line
             formated = ""
             line = ""
             for word in sentence.split(" "):
-                if len(line) + len(word) + 1 > 95:
+                if len(line) + len(word) + 1 > LIMIT:
                     formated += line + "\n"
                     line = ""
                 line += word + " "
