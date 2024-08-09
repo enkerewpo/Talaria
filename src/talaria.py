@@ -24,6 +24,7 @@ history = []
 
 TALARIA_PROMPT_INPUT_TYPE_KEYBOARD = 0
 TALARIA_PROMPT_INPUT_TYPE_FILE = 1
+TALARIA_PROMPT_INPUT_TYPE_DANMAKU = 2
 
 TALARIA_PROMPT_INPUT_TYPE_SELECT = TALARIA_PROMPT_INPUT_TYPE_FILE
 
@@ -94,7 +95,13 @@ def init():
     history.append(
         {
             "role": "user",
-            "content": "Remember, for every response you give me, the response should be only in one paragraph and no more than 9 sentences.",
+            "content": "Remember, I'm wheatfox, and for every response you give me, the response should be only in one paragraph and no more than 9 sentences.",
+        },
+    )
+    history.append(
+        {
+            "role": "assistant",
+            "content": "Sure, now you can start asking questions!",
         },
     )
 
@@ -169,25 +176,40 @@ def main_loop():
         global tmp_voice_output
         tmp_voice_output.clear()
 
-        def format_sentence(sentence):
-            LIMIT = 80
-            # each line can maximum have LIMIT characters
-            # and we add \n each LIMIT characters
-            # if the \n is in the middle of a word, we move it to the next line
-            formated = ""
-            line = ""
-            for word in sentence.split(" "):
-                if len(line) + len(word) + 1 > LIMIT:
-                    formated += line + "\n"
-                    line = ""
-                line += word + " "
-            formated += line
-            return formated
+        def format_sentence(sentence, language="en"):
+            if language == "zh":
+                # 45 characters per line
+                LIMIT = 45
+                # insert \n every LIMIT characters
+                formated = ""
+                line = ""
+                for i, char in enumerate(sentence):
+                    if len(line) + 1 > LIMIT:
+                        formated += line + "\n"
+                        line = ""
+                    line += char
+                formated += line
+                return formated
+            else:
+                LIMIT = 80
+                # each line can maximum have LIMIT characters
+                # and we add \n each LIMIT characters
+                # if the \n is in the middle of a word, we move it to the next line
+                formated = ""
+                line = ""
+                for word in sentence.split(" "):
+                    if len(line) + len(word) + 1 > LIMIT:
+                        formated += line + "\n"
+                        line = ""
+                    line += word + " "
+                formated += line
+                return formated
 
         for i, sentence in enumerate(split_sentences):
-            formated = format_sentence(sentence)
+            formated = format_sentence(sentence, "en")
             tmp_voice_output.append(formated)
             file_path = f"output_{i:03}.wav"
+            # tts_to_file_local(sentence, "./GLaDOS_01.wav", "en", file_path)
             tts_to_file_local(sentence, "./GLaDOS_01.wav", "en", file_path)
 
 

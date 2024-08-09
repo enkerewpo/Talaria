@@ -18,9 +18,6 @@ if __name__ == "__main__":
     def text_detected(text):
         # write text to voice_input.txt for each new detected sentence
         # overwrite the file if text is not empty
-        if text:
-            with open("voice_input.txt", "w") as f:
-                f.write(text)
         global displayed_text
         sentences_with_style = [
             f"{Fore.YELLOW + sentence + Style.RESET_ALL if i % 2 == 0 else Fore.CYAN + sentence + Style.RESET_ALL} "
@@ -31,6 +28,12 @@ if __name__ == "__main__":
             if len(sentences_with_style) > 0
             else text
         )
+        new_test_last = (
+            full_sentences[-1] + " " + text if len(full_sentences) > 0 else text
+        )
+        if len(new_test_last) > 0:
+            with open("voice_input.txt", "w") as f:
+                f.write(new_test_last)
 
         if new_text != displayed_text:
             displayed_text = new_text
@@ -43,7 +46,7 @@ if __name__ == "__main__":
 
     recorder_config = {
         "spinner": False,
-        "model": "small",
+        "model": "medium",
         "language": "en",
         "silero_sensitivity": 0.4,
         "webrtc_sensitivity": 2,
@@ -55,6 +58,21 @@ if __name__ == "__main__":
         "realtime_model_type": "tiny.en",
         "on_realtime_transcription_update": text_detected,
     }
+
+    # recorder_config = {
+    #     'spinner': False,
+    #     'model': 'small',
+    #     'language': 'zh',
+    #     'silero_sensitivity': 0.4,
+    #     'webrtc_sensitivity': 2,
+    #     'post_speech_silence_duration': 0.2,
+    #     'min_length_of_recording': 0,
+    #     'min_gap_between_recordings': 0,
+    #     'enable_realtime_transcription': True,
+    #     'realtime_processing_pause': 0.2,
+    #     'realtime_model_type': 'tiny',
+    #     'on_realtime_transcription_update': text_detected,
+    # }
 
     recorder = AudioToTextRecorder(**recorder_config)
 
