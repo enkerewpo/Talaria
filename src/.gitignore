@@ -2,3 +2,4 @@ output*
 *.log
 voice_input.txt
 voice_output.txt
+__pycache__/

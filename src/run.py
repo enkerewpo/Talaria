@@ -2,15 +2,21 @@ from loguru import logger
 
 logger.info("loading python modules, please wait...")
 
+import json
 import torch
 import time
 from TTS.api import TTS
 import os
 from openai import OpenAI
+import base64
 import threading
+import re
 
 VERSION = "0.1.0"
 AUTHORS = "wheatfox <enkerewpo@hotmail.com>"
+
+from talaria.functional import Function
+from talaria import capture
 
 logger.info("welcome to Talaria [v{}, {}]", VERSION, AUTHORS)
 
@@ -24,9 +30,8 @@ history = []
 
 TALARIA_PROMPT_INPUT_TYPE_KEYBOARD = 0
 TALARIA_PROMPT_INPUT_TYPE_FILE = 1
-TALARIA_PROMPT_INPUT_TYPE_DANMAKU = 2
 
-TALARIA_PROMPT_INPUT_TYPE_SELECT = TALARIA_PROMPT_INPUT_TYPE_FILE
+TALARIA_PROMPT_INPUT_TYPE_SELECT = TALARIA_PROMPT_INPUT_TYPE_KEYBOARD
 
 # create the openai client
 client = OpenAI(api_key=OPENAI_KEY, base_url=OPENAI_URL)
@@ -71,13 +76,62 @@ def get_prompt_input():
         return ret
 
 
-def get_llm_response(prompt, history):
+class PromptConfig:
+    """
+    used to add auxiliary information to the prompt
+    such as local image path
+    """
+
+    def __init__(self):
+        self.local_image_path = ""
+
+    def set_local_image_path(self, path):
+        self.local_image_path = path
+
+    def get_local_image_path(self):
+        return self.local_image_path
+
+
+def encode_image(image_path):
+    """encode the image to base64 for the language model"""
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode("utf-8")
+
+
+def get_llm_response(prompt, history, config=None):
     """get response from the language model"""
-    history.append({"role": "user", "content": prompt})
-    result = client.chat.completions.create(messages=history, model="gpt-4o")
-    response = result.choices[0].message.content
-    history.append({"role": "assistant", "content": response})
-    return response
+    if config is None:
+        # the normal case where we just need the dialog interaction
+        history.append({"role": "user", "content": prompt})
+        result = client.chat.completions.create(messages=history, model="gpt-4o")
+        response = result.choices[0].message.content
+        history.append({"role": "assistant", "content": response})
+        return response
+    else:
+        # the case where we need to add some auxiliary information to the prompt
+        if config.get_local_image_path() != "":
+            # use gpt-4-vision-preview model
+            image = encode_image(config.get_local_image_path())
+            result = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "What’s in this image?"},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{image}"},
+                            },
+                        ],
+                    }
+                ],
+            )
+            response = result.choices[0].message.content
+            history.append({"role": "assistant", "content": response})
+            return response
+        else:
+            logger.error("not supported config: {}", config)
 
 
 def init():
@@ -85,25 +139,13 @@ def init():
     global tts
     tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
     logger.info(f"tts using device: {device}")
-    # add some pre-populated history
-    history.append(
-        {
-            "role": "assistant",
-            "content": "Hello, I am Tara, an AI assistant.",
-        },
-    )
-    history.append(
-        {
-            "role": "user",
-            "content": "Remember, I'm wheatfox, and for every response you give me, the response should be only in one paragraph and no more than 9 sentences.",
-        },
-    )
-    history.append(
-        {
-            "role": "assistant",
-            "content": "Sure, now you can start asking questions!",
-        },
-    )
+    # add some pre-populated history from inference.en.json
+    with open("inference.en.json", "r") as f:
+        data = json.load(f)
+        for d in data:
+            history.append({"role": d["role"], "content": d["content"]})
+    # function registration
+    capture.init()
 
 
 def tts_to_file_local(text, speaker_wav, language, file_path):
@@ -119,7 +161,6 @@ def play_audio_monitor(total):
         if f.startswith("output_") and f.endswith(".wav"):
             os.remove(f)
     current_index = 0
-    time.sleep(1)
     while True:
         # check whether the current_index is in the wav_files list
         # output_001.wav, output_002.wav, output_003.wav
@@ -133,7 +174,7 @@ def play_audio_monitor(total):
                 # call cmd line to play the audio and wait for it to finish
                 global tmp_voice_output
                 # get the front of tmp_voice_output and write it to voice_output.txt
-                logger.debug("dump tmp_voice_output: {}", tmp_voice_output)
+                # logger.debug("dump tmp_voice_output: {}", tmp_voice_output)
                 with open("voice_output.txt", "w") as f:
                     f.write(tmp_voice_output[current_index])
                 os.system(f"ffplay -nodisp -autoexit {path}")
@@ -142,6 +183,26 @@ def play_audio_monitor(total):
                 current_index += 1
         else:
             break
+
+
+def format_sentence(sentence, language="en"):
+    if language == "en":
+        LIMIT = 80
+        # each line can maximum have LIMIT characters
+        # and we add \n each LIMIT characters
+        # if the \n is in the middle of a word, we move it to the next line
+        formated = ""
+        line = ""
+        for word in sentence.split(" "):
+            if len(line) + len(word) + 1 > LIMIT:
+                formated += line + "\n"
+                line = ""
+            line += word + " "
+        formated += line
+        return formated
+    else:
+        logger.error("unsupported language: {}", language)
+        return sentence
 
 
 tmp_voice_output = []
@@ -156,13 +217,34 @@ def main_loop():
         if prompt == "exit":
             break
 
-        print("> ", end="")
-        response = get_llm_response(prompt, history)
-        print(response)
+        json_raw = get_llm_response(prompt, history)
+        json_struct = json.loads(json_raw)
+        logger.debug("response: {}", json_struct)
+        response = json_struct["response"]
+
+        triggered_function_names = []
+        function_trigger_flag = json_struct["function_trigger_flag"]
+
+        registered_functions_local = Function.new().get_all()
+        for function_name in function_trigger_flag:
+            if function_trigger_flag[function_name]:
+                prefix = function_name.split("_")[0]
+                triggered_function_names.append(prefix)
+                # call the function only if it is registered
+                if prefix in registered_functions_local:
+                    func = registered_functions_local[prefix]
+                    func()
+                else:
+                    logger.error("function {} is not registered", prefix)
+        logger.info("triggered functions: {}", triggered_function_names)
+
+        # if triggered capture, we need to re-ask the GPT and append the image screenshot.png
+        if "capture" in triggered_function_names:
+            config = PromptConfig()
+            config.set_local_image_path("screenshot.png")
+            response = get_llm_response(prompt, history, config)  # update response
 
         # split the response into sentences by . ? ! ;
-        import re
-
         split_sentences = re.split(r"[.?!;]", response)
         # cleanup split_sentences, remove empty strings in the list
         split_sentences = [s.strip() for s in split_sentences if len(s.strip()) > 0]
@@ -176,41 +258,11 @@ def main_loop():
         global tmp_voice_output
         tmp_voice_output.clear()
 
-        def format_sentence(sentence, language="en"):
-            if language == "zh":
-                # 45 characters per line
-                LIMIT = 45
-                # insert \n every LIMIT characters
-                formated = ""
-                line = ""
-                for i, char in enumerate(sentence):
-                    if len(line) + 1 > LIMIT:
-                        formated += line + "\n"
-                        line = ""
-                    line += char
-                formated += line
-                return formated
-            else:
-                LIMIT = 80
-                # each line can maximum have LIMIT characters
-                # and we add \n each LIMIT characters
-                # if the \n is in the middle of a word, we move it to the next line
-                formated = ""
-                line = ""
-                for word in sentence.split(" "):
-                    if len(line) + len(word) + 1 > LIMIT:
-                        formated += line + "\n"
-                        line = ""
-                    line += word + " "
-                formated += line
-                return formated
-
         for i, sentence in enumerate(split_sentences):
             formated = format_sentence(sentence, "en")
             tmp_voice_output.append(formated)
             file_path = f"output_{i:03}.wav"
-            # tts_to_file_local(sentence, "./GLaDOS_01.wav", "en", file_path)
-            tts_to_file_local(sentence, "./GLaDOS_01.wav", "en", file_path)
+            tts_to_file_local(sentence, "./TTS/GLaDOS_01.wav", "en", file_path)
 
 
 init()
