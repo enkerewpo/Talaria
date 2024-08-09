@@ -9,6 +9,7 @@ from TTS.api import TTS
 import os
 from openai import OpenAI
 import base64
+from pynput import keyboard
 import threading
 import re
 
@@ -31,7 +32,37 @@ history = []
 TALARIA_PROMPT_INPUT_TYPE_KEYBOARD = 0
 TALARIA_PROMPT_INPUT_TYPE_FILE = 1
 
-TALARIA_PROMPT_INPUT_TYPE_SELECT = TALARIA_PROMPT_INPUT_TYPE_KEYBOARD
+
+def input_type2str(input_type):
+    if input_type == TALARIA_PROMPT_INPUT_TYPE_KEYBOARD:
+        return "keyboard"
+    elif input_type == TALARIA_PROMPT_INPUT_TYPE_FILE:
+        return "voice_input_file"
+    else:
+        return "unknown"
+
+
+def set_input_type(input_type):
+    global TALARIA_PROMPT_INPUT_TYPE_SELECT
+    TALARIA_PROMPT_INPUT_TYPE_SELECT = input_type
+    logger.info("set input type to: {}", input_type2str(input_type))
+
+
+set_input_type(TALARIA_PROMPT_INPUT_TYPE_KEYBOARD)
+
+
+def on_key_press(key):
+    # if F2 is pressed, we switch the input type
+    if key == keyboard.Key.f2:
+        global TALARIA_PROMPT_INPUT_TYPE_SELECT
+        if TALARIA_PROMPT_INPUT_TYPE_SELECT == TALARIA_PROMPT_INPUT_TYPE_KEYBOARD:
+            set_input_type(TALARIA_PROMPT_INPUT_TYPE_FILE)
+        else:
+            set_input_type(TALARIA_PROMPT_INPUT_TYPE_KEYBOARD)
+
+
+keyboard_listener = keyboard.Listener(on_press=on_key_press)
+keyboard_listener.start()
 
 # create the openai client
 client = OpenAI(api_key=OPENAI_KEY, base_url=OPENAI_URL)
@@ -66,6 +97,10 @@ def voice_input():
 
 def get_prompt_input():
     """the input interface for the prompt, can be keyboard or file input"""
+    logger.info(
+        "waiting for input, current input type: {}",
+        input_type2str(TALARIA_PROMPT_INPUT_TYPE_SELECT),
+    )
     if TALARIA_PROMPT_INPUT_TYPE_SELECT == TALARIA_PROMPT_INPUT_TYPE_KEYBOARD:
         return input()
     elif TALARIA_PROMPT_INPUT_TYPE_SELECT == TALARIA_PROMPT_INPUT_TYPE_FILE:
